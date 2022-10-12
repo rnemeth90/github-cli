@@ -90,7 +90,7 @@ func createIssue(repo, owner, title, body, token string) {
 	}
 }
 
-//createRepo
+// createRepo
 func makeRepo(name, description, token string, private bool) error {
 	url := "https://api.github.com/user/repos"
 
@@ -127,6 +127,51 @@ func makeRepo(name, description, token string, private bool) error {
 
 	// we should return an error from this method, not this:
 	if resp.StatusCode != http.StatusCreated {
+		fmt.Printf("Response code is %d\n", resp.StatusCode)
+		body, _ := ioutil.ReadAll(resp.Body)
+		//print body as it may contain hints in case of errors
+		fmt.Println(string(body))
+		log.Fatal(err)
+	}
+	return nil
+}
+
+func getRepos(owner, token string) error {
+	url := "https://api.github.com/" + owner
+
+	if owner == "" || token == "" {
+		fmt.Println("You must specify a repo name and token")
+		os.Exit(2)
+	}
+
+	fmt.Printf("Getting repos for: %s\n", owner)
+
+	// repoData := Repository{
+	// 	Name:        name,
+	// 	Description: description,
+	// 	Private:     private,
+	// }
+
+	jsonData, err := json.Marshal(repoData)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer"+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// we should return an error from this method, not this:
+	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("Response code is %d\n", resp.StatusCode)
 		body, _ := ioutil.ReadAll(resp.Body)
 		//print body as it may contain hints in case of errors
