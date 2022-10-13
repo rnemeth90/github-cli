@@ -20,6 +20,7 @@ var (
 	title       = flag.String("title", "", "title for new issue")
 	body        = flag.String("body", "", "body for new issue")
 	createRepo  = flag.Bool("createRepo", false, "Create a repo")
+	getrepos    = flag.Bool("getrepos", false, "Get all repos for a user")
 	isPrivate   = flag.Bool("isPrivate", false, "Is the new repo private?")
 	description = flag.String("description", "", "Description for the repo")
 	help        = flag.Bool("help", false, "Print help")
@@ -63,6 +64,14 @@ func main() {
 	if *createRepo {
 		makeRepo(*repoName, *description, *token, *isPrivate)
 	}
+
+	if *getrepos {
+		repos, err := getRepos(*owner, *token)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(PrettyPrint(repos))
+	}
 }
 
 func createIssue(repo, owner, title, body, token string) {
@@ -90,7 +99,7 @@ func createIssue(repo, owner, title, body, token string) {
 	}
 }
 
-// createRepo
+// createRepo creates a repo for an authenticated user
 func makeRepo(name, description, token string, private bool) error {
 	url := "https://api.github.com/user/repos"
 
@@ -136,47 +145,43 @@ func makeRepo(name, description, token string, private bool) error {
 	return nil
 }
 
-func getRepos(owner, token string) error {
-	url := "https://api.github.com/" + owner
+// getRepos lists repos for an authenticated user
+func getRepos(owner, token string) ([]Repository, error) {
+	url := "https://api.github.com/user/repos"
 
 	if owner == "" || token == "" {
-		fmt.Println("You must specify a repo name and token")
+		fmt.Println("You must specify an owner and token")
 		os.Exit(2)
 	}
-
-	fmt.Printf("Getting repos for: %s\n", owner)
-
-	// repoData := Repository{
-	// 	Name:        name,
-	// 	Description: description,
-	// 	Private:     private,
-	// }
-
-	jsonData, err := json.Marshal(repoData)
-	if err != nil {
-		return err
-	}
-
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer"+token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// we should return an error from this method, not this:
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Response code is %d\n", resp.StatusCode)
-		body, _ := ioutil.ReadAll(resp.Body)
-		//print body as it may contain hints in case of errors
-		fmt.Println(string(body))
-		log.Fatal(err)
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var jsonData []Repository
+	err = json.Unmarshal([]byte(body), &jsonData) // here!
+	if err != nil {
+		panic(err)
 	}
-	return nil
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Response code is %d\n", resp.StatusCode)
+	}
+	return jsonData, nil
+}
+
+// PrettyPrint to print struct in a readable way
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
 }
